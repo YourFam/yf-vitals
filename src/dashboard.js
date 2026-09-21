@@ -1,6 +1,6 @@
 import { appendHistory, createHistory } from "./history.js";
 import { renderFrame } from "./render.js";
-import { createSampler, mergeLastGood } from "./sample.js";
+import { createSampler, instantSnapshot, mergeLastGood } from "./sample.js";
 import { CLEAR_HOME, enterTerminal, restoreTerminal } from "./tty.js";
 
 const CTRL_C = 0x03;
@@ -61,6 +61,16 @@ export async function runDashboard(args, deps) {
   };
 
   enterTerminal(write, stdin);
+  const first = instantSnapshot();
+  write(
+    CLEAR_HOME +
+      renderFrame(first, createHistory(), {
+        columns: deps.columns(),
+        env: deps.env,
+        isTTY: true,
+        intervalSec: args.interval,
+      }),
+  );
 
   const onData = (chunk) => {
     if (isQuitKey(chunk)) quit = true;
@@ -82,7 +92,7 @@ export async function runDashboard(args, deps) {
     sampler = deps.sampler || createSampler();
     let history = createHistory();
     /** @type {import("./sample.js").Snapshot | null} */
-    let last = null;
+    let last = first;
 
     while (!shouldStop()) {
       let snap;

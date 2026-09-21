@@ -108,6 +108,7 @@ test("dashboard loop restores terminal after injected stop", async () => {
     net: { txBps: null, rxBps: null },
     gpu: null,
   };
+  let sampled = false;
   const code = await runDashboard(
     { interval: 1, lowPower: false, help: false, version: false },
     {
@@ -116,8 +117,17 @@ test("dashboard loop restores terminal after injected stop", async () => {
       columns: () => 100,
       env: { NO_COLOR: "1" },
       process: { on() {}, off() {} },
-      sampler: { sample: async () => fake },
-      shouldStop: () => ticks >= 1,
+      sampler: {
+        sample: async () => {
+          assert.ok(
+            writes.some((w) => w.includes("yf-vitals")),
+            "first frame must paint before sample()",
+          );
+          sampled = true;
+          return fake;
+        },
+      },
+      shouldStop: () => sampled && ticks >= 1,
       sleep: async () => {
         ticks += 1;
       },

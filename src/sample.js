@@ -83,6 +83,42 @@ function windowsLabel(release) {
 }
 
 /**
+ * Sync snapshot from `os` only — first paint must not wait on PowerShell / nvidia-smi.
+ * @returns {Snapshot}
+ */
+export function instantSnapshot() {
+  const logical = Math.max(os.cpus().length, 1);
+  const total = os.totalmem();
+  const free = os.freemem();
+  const used = Math.max(0, total - free);
+  return {
+    ts: Date.now(),
+    hostname: os.hostname(),
+    osName: shortOsName(null),
+    physical: logical,
+    logical,
+    ramTotal: total,
+    cpu: null,
+    ram: total > 0 ? { percent: Math.min(100, (used / total) * 100), used, total } : null,
+    disk: { readBps: null, writeBps: null },
+    net: { txBps: null, rxBps: null },
+    gpu: null,
+  };
+}
+
+function ramFromOs(ramTotal) {
+  const total = ramTotal || os.totalmem();
+  const free = os.freemem();
+  const used = Math.max(0, total - free);
+  if (total <= 0) return null;
+  return {
+    percent: Math.min(100, Math.max(0, (used / total) * 100)),
+    used,
+    total,
+  };
+}
+
+/**
  * GPU memory fields in systeminformation are sometimes MiB, sometimes bytes.
  * @param {number | null} n
  * @param {number | null} vramMb
@@ -248,9 +284,26 @@ export function createSampler(si) {
   let prevTs = null;
   /** @type {Snapshot | null} */
   let last = null;
-  /** @type {Promise<{ hostname: string, osName: string, physical: number, logical: number, ramTotal: number }> | null} */
-  let staticP = null;
-  const winDisk = process.platform === "win32" ? createWindowsDiskReader() : null;
+  /** @type {{ hostname: string, osName: string, physical: number, logical: number, ramTotal: number }} */
+  let meta = (() => {
+    const s = instantSnapshot();
+    return {
+      hostname: s.hostname,
+      osName: s.osName,
+      physical: s.physical,
+      logical: s.logical,
+      ramTotal: s.ramTotal,
+    };
+  })();
+  let staticStarted = false;
+  /** @type {GpuSample | null} */
+  let gpuCache = null;
+  let gpuStarted = false;
+  const win32 = process.platform === "win32";
+  const winDisk = win32 ? createWindowsDiskReader() : null;
+  winDisk?.start();
+  let winReady = false;
+  prevCpu = cpuIdleTotal(os.cpus());
 
   async function loadSi() {
     if (si) return si;
@@ -258,43 +311,27 @@ export function createSampler(si) {
     return mod.default ?? mod;
   }
 
-  async function loadStatic() {
-    const lib = await loadSi();
-    const hostname = os.hostname();
-    let osName = shortOsName(null);
-    let logical = Math.max(os.cpus().length, 1);
-    let physical = logical;
-    let ramTotal = os.totalmem();
-    try {
-      const info = await lib.osInfo();
-      osName = shortOsName(info);
-    } catch {
-      // keep fallback
-    }
-    try {
-      const cpu = await lib.cpu();
-      if (cpu?.physicalCores) physical = cpu.physicalCores;
-      if (cpu?.cores) logical = cpu.cores;
-    } catch {
-      // keep os.cpus() counts
-    }
-    try {
-      const mem = await lib.mem();
-      if (mem?.total) ramTotal = mem.total;
-    } catch {
-      // keep os.totalmem
-    }
-    return { hostname, osName, physical, logical, ramTotal };
+  function kickStatic(lib) {
+    if (staticStarted) return;
+    staticStarted = true;
+    (async () => {
+      try {
+        const info = await lib.osInfo();
+        meta = { ...meta, osName: shortOsName(info) };
+      } catch {
+        // keep fallback
+      }
+      try {
+        const cpu = await lib.cpu();
+        if (cpu?.physicalCores) meta = { ...meta, physical: cpu.physicalCores };
+        if (cpu?.cores) meta = { ...meta, logical: cpu.cores };
+      } catch {
+        // keep os.cpus() counts
+      }
+    })();
   }
 
-  async function sampleCpu(lib) {
-    try {
-      const load = await lib.currentLoad();
-      const pct = num(load?.currentLoad);
-      if (pct != null) return { percent: Math.min(100, Math.max(0, pct)) };
-    } catch {
-      // fall through to os.cpus() idle-delta
-    }
+  async function sampleCpu() {
     const curr = cpuIdleTotal(os.cpus());
     const pct = cpuPercentFromDelta(prevCpu, curr);
     prevCpu = curr;
@@ -303,6 +340,7 @@ export function createSampler(si) {
   }
 
   async function sampleRam(lib, ramTotal) {
+    if (win32) return ramFromOs(ramTotal);
     try {
       const mem = await lib.mem();
       const total = num(mem?.total) ?? ramTotal;
@@ -310,22 +348,14 @@ export function createSampler(si) {
       let used = null;
       if (total != null && available != null) used = Math.max(0, total - available);
       else used = num(mem?.used) ?? num(mem?.active);
-      if (used == null || total == null || total <= 0) return null;
+      if (used == null || total == null || total <= 0) return ramFromOs(ramTotal);
       return {
         percent: Math.min(100, Math.max(0, (used / total) * 100)),
         used,
         total,
       };
     } catch {
-      const total = ramTotal || os.totalmem();
-      const free = os.freemem();
-      const used = total - free;
-      if (total <= 0) return null;
-      return {
-        percent: Math.min(100, Math.max(0, (used / total) * 100)),
-        used,
-        total,
-      };
+      return ramFromOs(ramTotal);
     }
   }
 
@@ -336,13 +366,13 @@ export function createSampler(si) {
   async function sampleDisk(lib, ts, win) {
     let rx = win ? num(win.rx) : null;
     let wx = win ? num(win.wx) : null;
-    if (rx == null && wx == null) {
+    if (rx == null && wx == null && !win32) {
       try {
         const fs = await lib.fsStats();
         rx = num(fs?.rx);
         wx = num(fs?.wx);
       } catch {
-        // Windows fsStats is always null
+        // ignore
       }
     }
     if (rx == null && wx == null) return { readBps: null, writeBps: null };
@@ -359,7 +389,7 @@ export function createSampler(si) {
   async function sampleNet(lib, ts, win) {
     let rx = win ? num(win.netRx) : null;
     let tx = win ? num(win.netTx) : null;
-    if (rx == null && tx == null) {
+    if (rx == null && tx == null && !win32) {
       try {
         const stats = await lib.networkStats("*");
         const summed = sumNetBytes(Array.isArray(stats) ? stats : stats ? [stats] : []);
@@ -375,13 +405,20 @@ export function createSampler(si) {
     return { txBps, rxBps };
   }
 
-  async function sampleGpu(lib) {
-    try {
-      const g = await lib.graphics();
-      return pickGpu(g?.controllers || []);
-    } catch {
-      return null;
-    }
+  function kickGpu(lib) {
+    if (gpuStarted) return;
+    gpuStarted = true;
+    lib
+      .graphics()
+      .then((g) => {
+        gpuCache = pickGpu(g?.controllers || []);
+      })
+      .catch(() => {
+        gpuCache = null;
+      })
+      .finally(() => {
+        gpuStarted = false;
+      });
   }
 
   return {
@@ -390,16 +427,16 @@ export function createSampler(si) {
      */
     async sample() {
       const lib = await loadSi();
-      if (!staticP) staticP = loadStatic();
-      const meta = await staticP;
-      const win = winDisk ? await winDisk.read().catch(() => null) : null;
+      kickStatic(lib);
+      kickGpu(lib);
+      const win = winDisk ? await winDisk.read(winReady ? 400 : 50).catch(() => null) : null;
+      if (win) winReady = true;
       const ts = Date.now();
-      const [cpu, ram, disk, net, gpu] = await Promise.all([
-        sampleCpu(lib).catch(() => last?.cpu ?? null),
+      const [cpu, ram, disk, net] = await Promise.all([
+        sampleCpu().catch(() => last?.cpu ?? null),
         sampleRam(lib, meta.ramTotal).catch(() => last?.ram ?? null),
         sampleDisk(lib, ts, win).catch(() => last?.disk ?? { readBps: null, writeBps: null }),
         sampleNet(lib, ts, win).catch(() => last?.net ?? { txBps: null, rxBps: null }),
-        sampleGpu(lib).catch(() => last?.gpu ?? null),
       ]);
       prevTs = ts;
       const snap = mergeLastGood(last, {
@@ -409,7 +446,7 @@ export function createSampler(si) {
         ram,
         disk,
         net,
-        gpu,
+        gpu: gpuCache,
       });
       last = snap;
       return snap;

@@ -87,10 +87,14 @@ export function createWindowsDiskReader() {
   }
 
   return {
+    start() {
+      ensure();
+    },
     /**
+     * @param {number} [timeoutMs]
      * @returns {Promise<ReturnType<typeof parseDiskCounterLine>>}
      */
-    read() {
+    read(timeoutMs = 400) {
       if (closed) return Promise.resolve(null);
       ensure();
       if (!child || !child.stdin.writable) return Promise.resolve(null);
@@ -99,7 +103,7 @@ export function createWindowsDiskReader() {
           const i = pending.findIndex((p) => p.resolve === done);
           if (i >= 0) pending.splice(i, 1);
           resolve(null);
-        }, 2500);
+        }, timeoutMs);
         const done = (v) => {
           clearTimeout(t);
           resolve(v);

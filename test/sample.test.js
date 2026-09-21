@@ -7,11 +7,24 @@ import {
   cpuIdleTotal,
   cpuPercentFromDelta,
   gpuBytes,
+  instantSnapshot,
   mergeLastGood,
   pickGpu,
   shortOsName,
   sumNetBytes,
 } from "../src/sample.js";
+
+test("instantSnapshot is sync and uses os only", () => {
+  const t0 = Date.now();
+  const s = instantSnapshot();
+  assert.ok(Date.now() - t0 < 50);
+  assert.ok(s.hostname);
+  assert.ok(s.ramTotal > 0);
+  assert.ok(s.ram);
+  assert.equal(s.cpu, null);
+  assert.equal(s.gpu, null);
+  assert.equal(s.disk.readBps, null);
+});
 
 test("pickGpu null without telemetry, row object when present", () => {
   assert.equal(pickGpu(null), null);
