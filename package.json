@@ -1,0 +1,50 @@
+{
+  "name": "@yourfam/yf-vitals",
+  "version": "0.1.0",
+  "description": "Live terminal dashboard for CPU, RAM, disk, net, and optional GPU",
+  "type": "module",
+  "bin": {
+    "yf-vitals": "bin/yf-vitals.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "yf-vitals": "node ./bin/yf-vitals.js"
+  },
+  "keywords": [
+    "cli",
+    "cpu",
+    "ram",
+    "dashboard",
+    "sysmon"
+  ],
+  "author": {
+    "name": "YourFam",
+    "email": "kamal@yourfam.co",
+    "url": "https://github.com/YourFam"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YourFam/yf-vitals.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YourFam/yf-vitals/issues"
+  },
+  "homepage": "https://github.com/YourFam/yf-vitals#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "picocolors": "^1.1.1",
+    "systeminformation": "^5.27.11"
+  }
+}

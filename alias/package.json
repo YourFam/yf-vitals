@@ -1,0 +1,44 @@
+{
+  "name": "yf-vitals",
+  "version": "0.1.0",
+  "description": "Unscoped alias of @yourfam/yf-vitals — live CPU, RAM, disk, net, GPU bars in the terminal",
+  "type": "module",
+  "bin": {
+    "yf-vitals": "bin/yf-vitals.js"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "cli",
+    "cpu",
+    "ram",
+    "dashboard",
+    "sysmon"
+  ],
+  "author": {
+    "name": "YourFam",
+    "email": "kamal@yourfam.co",
+    "url": "https://github.com/YourFam"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YourFam/yf-vitals.git",
+    "directory": "alias"
+  },
+  "bugs": {
+    "url": "https://github.com/YourFam/yf-vitals/issues"
+  },
+  "homepage": "https://github.com/YourFam/yf-vitals#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@yourfam/yf-vitals": "0.1.0"
+  }
+}
