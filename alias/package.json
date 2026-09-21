@@ -1,6 +1,6 @@
 {
   "name": "yf-vitals",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unscoped alias of @yourfam/yf-vitals — live CPU, RAM, disk, net, GPU bars in the terminal",
   "type": "module",
   "bin": {
@@ -39,6 +39,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@yourfam/yf-vitals": "0.1.0"
+    "@yourfam/yf-vitals": "0.1.1"
   }
 }

@@ -1,23 +1,43 @@
 import { spawn } from "node:child_process";
 
-const PS_DISK = `
+const PS_COUNTERS = `
 $ErrorActionPreference = 'SilentlyContinue'
 while (($line = [Console]::In.ReadLine()) -ne $null) {
   if ($line -eq 'q') { break }
+  $dr = [int64]0
+  $dw = [int64]0
+  $rx = [int64]0
+  $tx = [int64]0
   $d = Get-CimInstance -ClassName Win32_PerfRawData_PerfDisk_PhysicalDisk -Filter "Name='_Total'"
-  if ($d) { Write-Output ("{0} {1}" -f $d.DiskReadBytesPersec, $d.DiskWriteBytesPersec) }
-  else { Write-Output "n n" }
+  if ($d) {
+    $dr = [int64]$d.DiskReadBytesPersec
+    $dw = [int64]$d.DiskWriteBytesPersec
+  }
+  Get-NetAdapterStatistics | ForEach-Object {
+    $name = [string]$_.Name
+    if ($name -match 'vEthernet|Loopback|Bluetooth|WSL|Hyper-V|Virtual|Pseudo|isatap|Teredo') { return }
+    $rx += [int64]$_.ReceivedBytes
+    $tx += [int64]$_.SentBytes
+  }
+  Write-Output ("{0} {1} {2} {3}" -f $dr, $dw, $rx, $tx)
 }
 `.trim();
 
 /**
  * @param {string} line
- * @returns {{ rx: number, wx: number } | null}
+ * @returns {{ rx: number, wx: number, netRx: number, netTx: number } | null}
  */
 export function parseDiskCounterLine(line) {
-  const m = String(line || "").trim().match(/^(\d+)\s+(\d+)$/);
+  const m = String(line || "")
+    .trim()
+    .match(/^(\d+)\s+(\d+)(?:\s+(\d+)\s+(\d+))?$/);
   if (!m) return null;
-  return { rx: Number(m[1]), wx: Number(m[2]) };
+  return {
+    rx: Number(m[1]),
+    wx: Number(m[2]),
+    netRx: m[3] != null ? Number(m[3]) : 0,
+    netTx: m[4] != null ? Number(m[4]) : 0,
+  };
 }
 
 function encodedCommand(script) {
@@ -26,11 +46,12 @@ function encodedCommand(script) {
 
 /**
  * Long-lived PowerShell so WMI stays warm (~10ms/tick after first query).
+ * One round-trip: disk bytes + physical NIC byte counters.
  */
 export function createWindowsDiskReader() {
   let child = null;
   let buf = "";
-  /** @type {{ resolve: (v: { rx: number, wx: number } | null) => void }[]} */
+  /** @type {{ resolve: (v: ReturnType<typeof parseDiskCounterLine>) => void }[]} */
   let pending = [];
   let closed = false;
 
@@ -43,7 +64,7 @@ export function createWindowsDiskReader() {
     if (child || closed) return;
     child = spawn(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-EncodedCommand", encodedCommand(PS_DISK)],
+      ["-NoProfile", "-NonInteractive", "-EncodedCommand", encodedCommand(PS_COUNTERS)],
       { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] },
     );
     child.stdout.setEncoding("utf8");
@@ -67,7 +88,7 @@ export function createWindowsDiskReader() {
 
   return {
     /**
-     * @returns {Promise<{ rx: number, wx: number } | null>}
+     * @returns {Promise<ReturnType<typeof parseDiskCounterLine>>}
      */
     read() {
       if (closed) return Promise.resolve(null);

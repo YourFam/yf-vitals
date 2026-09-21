@@ -37,7 +37,7 @@ One live dashboard. Refresh every **1.0s** (or `--interval`, or **2.0s** with `-
 | **CPU** | Overall utilization 0–100%, plus physical / logical core counts |
 | **RAM** | Percent used, plus used / total (`GiB` / `MiB`) |
 | **DSK** | Read and write **rates** (KiB/s, MiB/s, GiB/s) |
-| **NET** | Send ↑ and receive ↓ in **Mbps** (1 Mbps = 1e6 bit/s) |
+| **NET** | Send ↑ and receive ↓ in **kbps / Mbps / Gbps** (decimal bits; 1 Mbps = 1e6 bit/s) |
 | **GPU** | Utilization and VRAM when telemetry exists; **the row is omitted** when it does not |
 
 Header: `yf-vitals` · hostname · OS · `NP/NL` cores · RAM total · tick interval.

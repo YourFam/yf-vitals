@@ -4,6 +4,7 @@ import { useAscii } from "../src/ascii.js";
 import { appendHistory, createHistory, pushSample } from "../src/history.js";
 import { parseDiskCounterLine } from "../src/disk.js";
 import {
+  cpuIdleTotal,
   cpuPercentFromDelta,
   gpuBytes,
   mergeLastGood,
@@ -16,11 +17,24 @@ test("pickGpu null without telemetry, row object when present", () => {
   assert.equal(pickGpu(null), null);
   assert.equal(pickGpu([]), null);
   assert.equal(pickGpu([{ vendor: "Acme" }]), null);
+  assert.equal(pickGpu([{ model: "AMD iGPU", vram: 2048 }]), null);
   const g = pickGpu([{ utilizationGpu: 55, memoryUsed: 2048, memoryTotal: 8192 }]);
   assert.ok(g);
   assert.equal(g.percent, 55);
   assert.equal(g.used, 2048 * 1024 * 1024);
   assert.equal(g.total, 8192 * 1024 * 1024);
+});
+
+test("pickGpu keeps 0% util and prefers the card with VRAM telemetry", () => {
+  const idle = pickGpu([{ utilizationGpu: 0, memoryUsed: 2211, memoryTotal: 16303 }]);
+  assert.ok(idle);
+  assert.equal(idle.percent, 0);
+  const mixed = pickGpu([
+    { model: "AMD", vram: 2048 },
+    { utilizationGpu: 0, memoryUsed: 2211, memoryTotal: 16303 },
+  ]);
+  assert.equal(mixed.percent, 0);
+  assert.equal(mixed.total, 16303 * 1024 * 1024);
 });
 
 test("gpuBytes treats large numbers as bytes", () => {
@@ -66,13 +80,24 @@ test("mergeLastGood keeps previous row on null", () => {
   assert.equal(merged.gpu.percent, 7);
 });
 
-test("sumNetBytes skips loopback", () => {
+test("sumNetBytes skips loopback and virtual NICs", () => {
   const s = sumNetBytes([
     { iface: "lo", rx_bytes: 99, tx_bytes: 99 },
-    { iface: "eth0", rx_bytes: 10, tx_bytes: 20 },
+    { iface: "vEthernet (WSL (Hyper-V firewall))", operstate: "up", rx_bytes: 500, tx_bytes: 500 },
+    { iface: "eth0", operstate: "up", rx_bytes: 10, tx_bytes: 20 },
   ]);
   assert.equal(s.rx, 10);
   assert.equal(s.tx, 20);
+});
+
+test("Windows cpu times do not double-count irq inside sys", () => {
+  const cpus = [
+    { times: { user: 10, nice: 0, sys: 30, irq: 10, idle: 60 } },
+  ];
+  const win = cpuIdleTotal(cpus, true);
+  const unix = cpuIdleTotal(cpus, false);
+  assert.equal(win.total, 100);
+  assert.equal(unix.total, 110);
 });
 
 test("shortOsName collapses Windows distro strings", () => {
@@ -81,7 +106,8 @@ test("shortOsName collapses Windows distro strings", () => {
 });
 
 test("parseDiskCounterLine", () => {
-  assert.deepEqual(parseDiskCounterLine("10 20"), { rx: 10, wx: 20 });
+  assert.deepEqual(parseDiskCounterLine("10 20"), { rx: 10, wx: 20, netRx: 0, netTx: 0 });
+  assert.deepEqual(parseDiskCounterLine("10 20 30 40"), { rx: 10, wx: 20, netRx: 30, netTx: 40 });
   assert.equal(parseDiskCounterLine("n n"), null);
 });
 

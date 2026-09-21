@@ -140,7 +140,7 @@ export function renderFrame(snap, history, opts = {}) {
   if (snap.net) {
     const up = formatBitRate(snap.net.txBps);
     const down = formatBitRate(snap.net.rxBps);
-    lines.push(`${color.yellow("NET")}  ↑  ${up.padStart(10)}    ↓  ${down.padStart(10)}`);
+    lines.push(`${color.yellow("NET")}  ↑  ${up.padStart(12)}    ↓  ${down.padStart(12)}`);
     lines.push(`     ${color.yellow(sparkline(history.net, sparkW, { ascii }))}`);
   } else {
     lines.push(`${color.yellow("NET")}  n/a`);

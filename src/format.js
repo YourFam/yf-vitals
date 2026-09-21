@@ -39,15 +39,19 @@ export function formatByteRate(bytesPerSec) {
 }
 
 /**
- * Network throughput in decimal Mbps (1 Mbps = 1e6 bit/s).
+ * Network throughput in decimal bit/s, auto-scaled (kbps / Mbps / Gbps).
+ * 1 kbps = 1e3 bit/s, 1 Mbps = 1e6 bit/s.
  * @param {number | null | undefined} bytesPerSec
  */
 export function formatBitRate(bytesPerSec) {
   if (bytesPerSec == null) return "—";
   const n = Number(bytesPerSec);
   if (!Number.isFinite(n) || n < 0) return "—";
-  const mbps = (n * 8) / 1e6;
-  return `${mbps.toFixed(1)} Mbps`;
+  const bits = n * 8;
+  if (bits >= 1e9) return `${(bits / 1e9).toFixed(2)} Gbps`;
+  if (bits >= 1e6) return `${(bits / 1e6).toFixed(1)} Mbps`;
+  if (bits >= 1e3) return `${(bits / 1e3).toFixed(1)} kbps`;
+  return `${bits.toFixed(0)} bps`;
 }
 
 /**

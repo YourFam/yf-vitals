@@ -98,7 +98,7 @@ Usage:
   --version, -V          Package version
 
 q / Q / Ctrl+C quit. GPU row is omitted when the OS has no GPU telemetry.
-Disk rates are MiB/s; network rates are Mbps.
+Disk rates are KiB/s–GiB/s; network rates are kbps/Mbps/Gbps.
 Disk / net sparklines scale to the max in the last 60 ticks (no 100% ceiling).
 Needs a terminal (no pipes). Node 20+.`;
 }
