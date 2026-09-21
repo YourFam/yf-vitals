@@ -9,6 +9,7 @@ import {
   UNI_BAR_FILLED,
   UNI_SPARK,
   bar,
+  heatLevel,
   sparkWidth,
   sparkline,
 } from "../src/bar.js";
@@ -34,10 +35,13 @@ test("bar ASCII charset", () => {
   );
 });
 
-test("sparkline length equals width; empty is placeholder", () => {
+test("sparkline length equals width; empty is lowest tick, not spaces", () => {
   assert.equal(sparkline([], 16).length, 16);
-  assert.equal(sparkline([], 16), " ".repeat(16));
-  assert.equal(sparkline([0, 50, 100], 16).length, 16);
+  assert.equal(sparkline([], 16), UNI_SPARK[0].repeat(16));
+  assert.equal(sparkline([], 16, { ascii: true }), ASC_SPARK[0].repeat(16));
+  const short = sparkline([0, 50, 100], 16, { max: 100 });
+  assert.equal(short.length, 16);
+  assert.equal(short.slice(0, 13), UNI_SPARK[0].repeat(13));
   assert.equal(sparkline([10, 20, 30, 40], 4).length, 4);
 });
 
@@ -55,4 +59,13 @@ test("sparkWidth is min(60, columns-36), at least 16", () => {
   assert.equal(sparkWidth(200), 60);
   assert.equal(sparkWidth(80), 44);
   assert.equal(sparkWidth(40), 16);
+});
+
+test("heatLevel bands", () => {
+  assert.equal(heatLevel(0), "ok");
+  assert.equal(heatLevel(49), "ok");
+  assert.equal(heatLevel(50), "warm");
+  assert.equal(heatLevel(79), "warm");
+  assert.equal(heatLevel(80), "hot");
+  assert.equal(heatLevel(150), "hot");
 });

@@ -5,12 +5,14 @@ import { HISTORY_SIZE } from "./bar.js";
  * @property {number[]} cpu
  * @property {number[]} ram
  * @property {number[]} gpu
- * @property {number[]} dsk
- * @property {number[]} net
+ * @property {number[]} dskR
+ * @property {number[]} dskW
+ * @property {number[]} netUp
+ * @property {number[]} netDn
  */
 
 export function createHistory() {
-  return { cpu: [], ram: [], gpu: [], dsk: [], net: [] };
+  return { cpu: [], ram: [], gpu: [], dskR: [], dskW: [], netUp: [], netDn: [] };
 }
 
 /**
@@ -33,26 +35,13 @@ export function pushSample(buf, value, size = HISTORY_SIZE) {
  * @returns {History}
  */
 export function appendHistory(history, snap) {
-  const cpu = snap.cpu?.percent;
-  const ram = snap.ram?.percent;
-  const gpu = snap.gpu?.percent;
-  const read = snap.disk?.readBps;
-  const write = snap.disk?.writeBps;
-  const tx = snap.net?.txBps;
-  const rx = snap.net?.rxBps;
-  let dsk;
-  if (read != null || write != null) {
-    dsk = (read ?? 0) + (write ?? 0);
-  }
-  let net;
-  if (tx != null || rx != null) {
-    net = (tx ?? 0) + (rx ?? 0);
-  }
   return {
-    cpu: pushSample(history.cpu, cpu),
-    ram: pushSample(history.ram, ram),
-    gpu: pushSample(history.gpu, gpu),
-    dsk: pushSample(history.dsk, dsk),
-    net: pushSample(history.net, net),
+    cpu: pushSample(history.cpu, snap.cpu?.percent),
+    ram: pushSample(history.ram, snap.ram?.percent),
+    gpu: pushSample(history.gpu, snap.gpu?.percent),
+    dskR: pushSample(history.dskR, snap.disk?.readBps),
+    dskW: pushSample(history.dskW, snap.disk?.writeBps),
+    netUp: pushSample(history.netUp, snap.net?.txBps),
+    netDn: pushSample(history.netDn, snap.net?.rxBps),
   };
 }

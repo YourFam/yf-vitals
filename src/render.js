@@ -1,5 +1,12 @@
 import { useAscii } from "./ascii.js";
-import { BAR_WIDTH, bar, barCharset, sparkWidth, sparkline } from "./bar.js";
+import {
+  BAR_WIDTH,
+  bar,
+  barCharset,
+  heatLevel,
+  sparkWidth,
+  sparkline,
+} from "./bar.js";
 import { createColor, stripAnsi } from "./color.js";
 import {
   formatBitRate,
@@ -40,6 +47,58 @@ export function fitLine(line, columns) {
 }
 
 /**
+ * @param {ReturnType<typeof createColor>} color
+ * @param {number} percent
+ * @param {"cyan" | "magenta" | "green"} row
+ */
+export function heatPaint(color, percent, row) {
+  const level = heatLevel(percent);
+  if (level === "hot") return color.red;
+  if (level === "warm") return color.yellow;
+  return color[row];
+}
+
+/**
+ * Percent bar: fill takes heat color, empty stays dim. Sparkline stays the row color.
+ *
+ * @param {number} percent
+ * @param {ReturnType<typeof createColor>} color
+ * @param {"cyan" | "magenta" | "green"} row
+ * @param {boolean} ascii
+ */
+export function paintPercentBar(percent, color, row, ascii) {
+  const cs = barCharset(ascii);
+  const raw = bar(percent, BAR_WIDTH, cs);
+  const filled = raw.replaceAll(cs.empty, "").length;
+  const fill = raw.slice(0, filled);
+  const empty = raw.slice(filled);
+  const paint = heatPaint(color, percent, row);
+  return `[${paint(fill)}${color.dim(empty)}]`;
+}
+
+/**
+ * Two labeled sparks on one line, sharing a max so the pair is comparable.
+ *
+ * @param {string} leftLabel
+ * @param {number[]} leftVals
+ * @param {string} rightLabel
+ * @param {number[]} rightVals
+ * @param {number} sparkW
+ * @param {boolean} ascii
+ */
+export function splitSparkLine(leftLabel, leftVals, rightLabel, rightVals, sparkW, ascii) {
+  const leftTag = `${leftLabel} `;
+  const mid = `  ${rightLabel} `;
+  const overhead = leftTag.length + mid.length;
+  const inner = Math.max(overhead + 8, Number(sparkW) || 16);
+  const each = Math.max(4, Math.floor((inner - overhead) / 2));
+  const pairMax = Math.max(0, ...leftVals, ...rightVals);
+  const left = sparkline(leftVals, each, { ascii, max: pairMax || undefined });
+  const right = sparkline(rightVals, each, { ascii, max: pairMax || undefined });
+  return `${leftTag}${left}${mid}${right}`;
+}
+
+/**
  * @param {import("./sample.js").GpuSample | null | undefined} gpu
  * @param {{ history: number[], ascii: boolean, color: ReturnType<typeof createColor>, sparkW: number }} opts
  * @returns {string[] | null}
@@ -47,18 +106,15 @@ export function fitLine(line, columns) {
 export function buildGpuRow(gpu, opts) {
   if (gpu == null) return null;
   const { ascii, color, sparkW, history } = opts;
-  const cs = barCharset(ascii);
   const pct = gpu.percent;
-  const barStr =
-    pct == null ? null : bar(pct, BAR_WIDTH, cs);
   const pctStr = pct == null ? "n/a" : formatPercent(pct);
   const mem =
     gpu.used != null && gpu.total != null ? formatBytePair(gpu.used, gpu.total) : "";
   const label = color.green("GPU");
   const head =
-    barStr == null
+    pct == null
       ? `${label}  ${pctStr}${mem ? `   ${mem}` : ""}`
-      : `${label}  [${color.green(barStr)}]  ${pctStr}${mem ? `   ${mem}` : ""}`;
+      : `${label}  ${paintPercentBar(pct, color, "green", ascii)}  ${pctStr}${mem ? `   ${mem}` : ""}`;
   const spark = color.green(sparkline(history, sparkW, { ascii, max: 100 }));
   return [head, `     ${spark}`];
 }
@@ -74,7 +130,6 @@ export function renderFrame(snap, history, opts = {}) {
   const ascii = useAscii(env);
   const color = createColor({ isTTY: Boolean(opts.isTTY), env });
   const sparkW = sparkWidth(columns);
-  const cs = barCharset(ascii);
   const interval = formatInterval(opts.intervalSec ?? 1);
   const cores = formatCores(snap.physical, snap.logical);
   const ramTot = formatBytes(snap.ramTotal);
@@ -91,10 +146,9 @@ export function renderFrame(snap, history, opts = {}) {
   const lines = [header, ""];
 
   if (snap.cpu) {
-    const b = color.cyan(bar(snap.cpu.percent, BAR_WIDTH, cs));
     const detail = formatCoresDetail(snap.physical, snap.logical);
     lines.push(
-      `${color.cyan("CPU")}  [${b}]  ${formatPercent(snap.cpu.percent)}   ${detail}`,
+      `${color.cyan("CPU")}  ${paintPercentBar(snap.cpu.percent, color, "cyan", ascii)}  ${formatPercent(snap.cpu.percent)}   ${detail}`,
     );
     lines.push(`     ${color.cyan(sparkline(history.cpu, sparkW, { ascii, max: 100 }))}`);
   } else {
@@ -104,9 +158,8 @@ export function renderFrame(snap, history, opts = {}) {
   lines.push("");
 
   if (snap.ram) {
-    const b = color.magenta(bar(snap.ram.percent, BAR_WIDTH, cs));
     lines.push(
-      `${color.magenta("RAM")}  [${b}]  ${formatPercent(snap.ram.percent)}   ${formatBytePair(snap.ram.used, snap.ram.total)}`,
+      `${color.magenta("RAM")}  ${paintPercentBar(snap.ram.percent, color, "magenta", ascii)}  ${formatPercent(snap.ram.percent)}   ${formatBytePair(snap.ram.used, snap.ram.total)}`,
     );
     lines.push(`     ${color.magenta(sparkline(history.ram, sparkW, { ascii, max: 100 }))}`);
   } else {
@@ -130,10 +183,14 @@ export function renderFrame(snap, history, opts = {}) {
     const r = formatByteRate(snap.disk.readBps);
     const w = formatByteRate(snap.disk.writeBps);
     lines.push(`${color.green("DSK")}  R  ${r.padStart(11)}   W  ${w.padStart(11)}`);
-    lines.push(`     ${color.green(sparkline(history.dsk, sparkW, { ascii }))}`);
+    lines.push(
+      `     ${color.green(splitSparkLine("R", history.dskR, "W", history.dskW, sparkW, ascii))}`,
+    );
   } else {
     lines.push(`${color.green("DSK")}  n/a`);
-    lines.push(`     ${color.green(sparkline(history.dsk, sparkW, { ascii }))}`);
+    lines.push(
+      `     ${color.green(splitSparkLine("R", history.dskR, "W", history.dskW, sparkW, ascii))}`,
+    );
   }
   lines.push("");
 
@@ -141,10 +198,14 @@ export function renderFrame(snap, history, opts = {}) {
     const up = formatBitRate(snap.net.txBps);
     const down = formatBitRate(snap.net.rxBps);
     lines.push(`${color.yellow("NET")}  ↑  ${up.padStart(12)}    ↓  ${down.padStart(12)}`);
-    lines.push(`     ${color.yellow(sparkline(history.net, sparkW, { ascii }))}`);
+    lines.push(
+      `     ${color.yellow(splitSparkLine("↑", history.netUp, "↓", history.netDn, sparkW, ascii))}`,
+    );
   } else {
     lines.push(`${color.yellow("NET")}  n/a`);
-    lines.push(`     ${color.yellow(sparkline(history.net, sparkW, { ascii }))}`);
+    lines.push(
+      `     ${color.yellow(splitSparkLine("↑", history.netUp, "↓", history.netDn, sparkW, ascii))}`,
+    );
   }
   lines.push("");
   lines.push("q quit");

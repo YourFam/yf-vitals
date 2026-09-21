@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createHistory } from "../src/history.js";
-import { buildGpuRow, renderFrame } from "../src/render.js";
-import { createColor } from "../src/color.js";
+import { appendHistory, createHistory } from "../src/history.js";
+import { buildGpuRow, renderFrame, splitSparkLine } from "../src/render.js";
+import { createColor, stripAnsi } from "../src/color.js";
 import { restoreTerminal, ENTER_ALT, HIDE_CURSOR, SHOW_CURSOR, LEAVE_ALT } from "../src/tty.js";
 import { pickGpu } from "../src/sample.js";
 
@@ -62,6 +62,28 @@ test("NO_COLOR=1 → rendered frame has no ANSI CSI", () => {
   assert.doesNotMatch(frame, /^GPU/m);
 });
 
+test("DSK and NET sparks are split R/W and ↑/↓", () => {
+  let history = createHistory();
+  history = appendHistory(history, snap());
+  const frame = renderFrame(snap(), history, {
+    columns: 120,
+    env: { NO_COLOR: "1" },
+    isTTY: true,
+  });
+  assert.match(frame, /R [▁▂▃▄▅▆▇█_=#-]+  W [▁▂▃▄▅▆▇█_=#-]+/);
+  assert.match(frame, /↑ [▁▂▃▄▅▆▇█_=#-]+  ↓ [▁▂▃▄▅▆▇█_=#-]+/);
+});
+
+test("splitSparkLine shares max and fills unused slots with the floor tick", () => {
+  const line = splitSparkLine("R", [10], "W", [100], 24, false);
+  assert.match(line, /^R /);
+  assert.match(line, /  W /);
+  assert.equal(line.includes(" "), true);
+  const bits = line.split(/\s+/).filter(Boolean);
+  assert.equal(bits[0], "R");
+  assert.equal(bits[2], "W");
+});
+
 test("GPU appears between RAM and DSK when present", () => {
   const frame = renderFrame(
     snap({ gpu: { percent: 10, used: 1, total: 2 * 1024 ** 3 } }),
@@ -82,6 +104,26 @@ test("color frame emits CSI when TTY and NO_COLOR unset", () => {
     intervalSec: 1,
   });
   assert.match(frame, /\u001b\[[0-9;]*m/);
+});
+
+test("bar fill is yellow at 72% and red at 90%", () => {
+  const cpuLine = (frame) =>
+    frame.split("\n").find((l) => stripAnsi(l).includes("CPU")) || "";
+  const opts = { columns: 120, env: { TERM: "xterm-256color", WT_SESSION: "1" }, isTTY: true };
+  const coolRam = { percent: 20, used: 1, total: 32 * 1024 ** 3 };
+  const warm = cpuLine(
+    renderFrame(snap({ cpu: { percent: 72 }, ram: coolRam }), createHistory(), opts),
+  );
+  const hot = cpuLine(
+    renderFrame(snap({ cpu: { percent: 90 }, ram: coolRam }), createHistory(), opts),
+  );
+  const cool = cpuLine(
+    renderFrame(snap({ cpu: { percent: 20 }, ram: coolRam }), createHistory(), opts),
+  );
+  assert.match(warm, /\u001b\[33m/);
+  assert.match(hot, /\u001b\[31m/);
+  assert.doesNotMatch(cool, /\u001b\[33m/);
+  assert.doesNotMatch(cool, /\u001b\[31m/);
 });
 
 test("restoreTerminal restores cursor and alt-screen flags", () => {

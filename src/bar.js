@@ -55,8 +55,9 @@ export function sparkline(values, width, opts = {}) {
   if (w === 0) return "";
   const charset = opts.ascii ? ASC_SPARK : UNI_SPARK;
   const list = Array.isArray(values) ? values : [];
+  const floor = charset[0];
   if (list.length === 0) {
-    return " ".repeat(w);
+    return floor.repeat(w);
   }
   const slice = list.slice(-w);
   const pad = w - slice.length;
@@ -64,7 +65,21 @@ export function sparkline(values, width, opts = {}) {
   const dataMax = slice.reduce((m, v) => (v > m ? v : m), 0);
   const max = explicitMax != null ? explicitMax : dataMax;
   const chars = slice.map((v) => sparkChar(v, max, charset));
-  return " ".repeat(pad) + chars.join("");
+  return floor.repeat(pad) + chars.join("");
+}
+
+export const HEAT_WARM = 50;
+export const HEAT_HOT = 80;
+
+/**
+ * @param {number} percent
+ * @returns {"ok" | "warm" | "hot"}
+ */
+export function heatLevel(percent) {
+  const n = Number(percent);
+  if (!Number.isFinite(n) || n < HEAT_WARM) return "ok";
+  if (n < HEAT_HOT) return "warm";
+  return "hot";
 }
 
 /**

@@ -12,6 +12,7 @@ export function createColor(opts) {
     magenta: (value) => pc.magenta(String(value)),
     green: (value) => pc.green(String(value)),
     yellow: (value) => pc.yellow(String(value)),
+    red: (value) => pc.red(String(value)),
     dim: (value) => pc.dim(String(value)),
   };
 }

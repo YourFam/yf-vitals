@@ -141,6 +141,9 @@ test("appendHistory skips null rates", () => {
     gpu: null,
   });
   assert.deepEqual(h.cpu, [1]);
-  assert.deepEqual(h.dsk, []);
+  assert.deepEqual(h.dskR, []);
+  assert.deepEqual(h.dskW, []);
+  assert.deepEqual(h.netUp, []);
+  assert.deepEqual(h.netDn, []);
   assert.deepEqual(h.gpu, []);
 });

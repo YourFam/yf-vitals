@@ -42,7 +42,9 @@ One live dashboard. Refresh every **1.0s** (or `--interval`, or **2.0s** with `-
 
 Header: `yf-vitals` · hostname · OS · `NP/NL` cores · RAM total · tick interval.
 
-Each percent row has a 20-cell bar and a sparkline of the last 60 ticks. Disk and net sparklines scale to the **max in that buffer** (rates have no 100% ceiling). CPU / RAM / GPU sparklines are percent 0–100.
+Each percent row has a 20-cell bar and a sparkline of the last 60 ticks. Unused spark slots use the lowest tick (`▁` / `_`), not blank space. Bar fill stays the row color below 50%, turns **yellow at 50%**, **red at 80%**. Sparklines stay the row color.
+
+Disk and net each show **two** sparks (`R`/`W`, `↑`/`↓`) scaled to the **max of that pair** in the buffer (rates have no 100% ceiling). CPU / RAM / GPU sparks are percent 0–100.
 
 First disk/net tick may show `—` while counters settle.
 
