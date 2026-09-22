@@ -36,10 +36,10 @@ One live dashboard. Refresh every **1.0s** (or `--interval`, or **2.0s** with `-
 |---|---|
 | **CPU** | Overall utilization 0–100%, plus physical / logical core counts |
 | **RAM** | Percent used, plus used / total (`GiB` / `MiB`) |
-| **C: / D: / Data** | One bar per local partition. Skips Google Drive, iCloud, network, FAT/USB |
+| **GPU** | Utilization and VRAM when telemetry exists; **the row is omitted** when it does not |
 | **DSK** | Read and write **rates** (KiB/s, MiB/s, GiB/s) |
 | **NET** | Send ↑ and receive ↓ in **kbps / Mbps / Gbps** (decimal bits; 1 Mbps = 1e6 bit/s) |
-| **GPU** | Utilization and VRAM when telemetry exists; **the row is omitted** when it does not |
+| **C: / D: / Data** | Capacity last: one bar per local partition. Skips Google Drive, iCloud, network, FAT/USB |
 
 Header: `yf-vitals` · hostname · OS · `NP/NL` cores · RAM total · tick interval.
 

@@ -102,10 +102,11 @@ test("each local partition gets its own bar; omitted when missing", () => {
     { columns: 120, env: { NO_COLOR: "1" }, isTTY: true },
   );
   const ram = frame.indexOf("RAM");
+  const dsk = frame.indexOf("DSK");
+  const net = frame.indexOf("NET");
   const c = frame.indexOf("C:");
   const d = frame.indexOf("D:");
-  const dsk = frame.indexOf("DSK");
-  assert.ok(ram >= 0 && c > ram && d > c && dsk > d);
+  assert.ok(ram >= 0 && dsk > ram && net > dsk && c > net && d > c);
   assert.match(frame, /C:.*36%/);
   assert.match(frame, /D:.*10%/);
 });

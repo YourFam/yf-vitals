@@ -168,18 +168,6 @@ export function renderFrame(snap, history, opts = {}) {
   }
   lines.push("");
 
-  if (Array.isArray(snap.diskUse) && snap.diskUse.length) {
-    for (const vol of snap.diskUse) {
-      const label = vol.mount.length >= 3 ? vol.mount.slice(0, 4) : vol.mount.padEnd(3);
-      const spark = history.diskUse?.[vol.mount] || [];
-      lines.push(
-        `${color.green(label)}  ${paintPercentBar(vol.percent, color, "green", ascii)}  ${formatPercent(vol.percent)}   ${formatBytePair(vol.used, vol.total)}`,
-      );
-      lines.push(`     ${color.green(sparkline(spark, sparkW, { ascii, max: 100 }))}`);
-      lines.push("");
-    }
-  }
-
   const gpuLines = buildGpuRow(snap.gpu, {
     history: history.gpu,
     ascii,
@@ -220,6 +208,19 @@ export function renderFrame(snap, history, opts = {}) {
     );
   }
   lines.push("");
+
+  if (Array.isArray(snap.diskUse) && snap.diskUse.length) {
+    for (const vol of snap.diskUse) {
+      const label = vol.mount.length >= 3 ? vol.mount.slice(0, 4) : vol.mount.padEnd(3);
+      const spark = history.diskUse?.[vol.mount] || [];
+      lines.push(
+        `${color.green(label)}  ${paintPercentBar(vol.percent, color, "green", ascii)}  ${formatPercent(vol.percent)}   ${formatBytePair(vol.used, vol.total)}`,
+      );
+      lines.push(`     ${color.green(sparkline(spark, sparkW, { ascii, max: 100 }))}`);
+      lines.push("");
+    }
+  }
+
   lines.push("q quit");
 
   return lines.map((ln) => fitLine(ln, columns)).join("\n");
