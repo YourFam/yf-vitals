@@ -37,7 +37,7 @@ import { rateFromCounters } from "./rates.js";
  * @property {DiskSample | null} disk
  * @property {NetSample | null} net
  * @property {GpuSample | null} gpu
- * @property {{ percent: number, used: number, total: number, mount: string, others: { percent: number, used: number, total: number, mount: string }[] } | null} diskUse
+ * @property {{ percent: number, used: number, total: number, mount: string }[] | null} diskUse
  */
 
 /**

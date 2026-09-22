@@ -168,18 +168,17 @@ export function renderFrame(snap, history, opts = {}) {
   }
   lines.push("");
 
-  if (snap.diskUse) {
-    lines.push(
-      `${color.green("USE")}  ${paintPercentBar(snap.diskUse.percent, color, "green", ascii)}  ${formatPercent(snap.diskUse.percent)}   ${formatBytePair(snap.diskUse.used, snap.diskUse.total)}  ${snap.diskUse.mount}`,
-    );
-    lines.push(`     ${color.green(sparkline(history.diskUse, sparkW, { ascii, max: 100 }))}`);
-    for (const extra of snap.diskUse.others || []) {
+  if (Array.isArray(snap.diskUse) && snap.diskUse.length) {
+    for (const vol of snap.diskUse) {
+      const label = vol.mount.length >= 3 ? vol.mount.slice(0, 4) : vol.mount.padEnd(3);
+      const spark = history.diskUse?.[vol.mount] || [];
       lines.push(
-        `     ${extra.mount}  ${formatPercent(extra.percent).trim()}   ${formatBytePair(extra.used, extra.total)}`,
+        `${color.green(label)}  ${paintPercentBar(vol.percent, color, "green", ascii)}  ${formatPercent(vol.percent)}   ${formatBytePair(vol.used, vol.total)}`,
       );
+      lines.push(`     ${color.green(sparkline(spark, sparkW, { ascii, max: 100 }))}`);
+      lines.push("");
     }
   }
-  if (snap.diskUse) lines.push("");
 
   const gpuLines = buildGpuRow(snap.gpu, {
     history: history.gpu,

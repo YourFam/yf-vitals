@@ -70,16 +70,16 @@ test("keeps local NTFS and APFS system volumes", () => {
   );
 });
 
-test("summarizeLocalDisks prefers C: and drops G Drive plus APFS clones", () => {
+test("summarizeLocalDisks lists each local partition; drops G Drive and APFS clones", () => {
   const out = summarizeLocalDisks([
     { fs: "C:", type: "NTFS", mount: "C:", size: 931 * GiB, used: 332 * GiB, use: 35.7 },
     { fs: "D:", type: "NTFS", mount: "D:", size: 1863 * GiB, used: 178 * GiB, use: 9.5 },
     { fs: "G:", type: "FAT32", mount: "G:", size: 931 * GiB, used: 362 * GiB, use: 38.9 },
   ]);
   assert.ok(out);
-  assert.equal(out.mount, "C:");
-  assert.equal(out.others.length, 1);
-  assert.equal(out.others[0].mount, "D:");
+  assert.equal(out.length, 2);
+  assert.equal(out[0].mount, "C:");
+  assert.equal(out[1].mount, "D:");
   const mac = summarizeLocalDisks([
     { fs: "/dev/disk3s1", type: "APFS", mount: "/", size: 500 * GiB, used: 200 * GiB, use: 40 },
     {
@@ -92,8 +92,8 @@ test("summarizeLocalDisks prefers C: and drops G Drive plus APFS clones", () => 
     },
   ]);
   assert.ok(mac);
-  assert.equal(mac.mount, "Data");
-  assert.equal(mac.others.length, 0);
+  assert.equal(mac.length, 1);
+  assert.equal(mac[0].mount, "Data");
 });
 
 test("shortMount", () => {

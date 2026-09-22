@@ -56,8 +56,29 @@ function systemScore(row) {
 }
 
 /**
+ * @param {{ fs?: string, type?: string, mount?: string, size?: number, used?: number, use?: number }} r
+ */
+function toVolume(r) {
+  const total = Number(r.size) || 0;
+  const used = Number(r.used) || 0;
+  const percent =
+    typeof r.use === "number" && Number.isFinite(r.use)
+      ? r.use
+      : total > 0
+        ? (used / total) * 100
+        : 0;
+  return {
+    percent: Math.min(100, Math.max(0, percent)),
+    used,
+    total,
+    mount: shortMount(r.mount || r.fs || ""),
+  };
+}
+
+/**
+ * One first-class volume per local partition. System disk first, then the rest.
  * @param {Array<{ fs?: string, type?: string, mount?: string, size?: number, used?: number, use?: number }>} rows
- * @returns {{ percent: number, used: number, total: number, mount: string, others: { percent: number, used: number, total: number, mount: string }[] } | null}
+ * @returns {{ percent: number, used: number, total: number, mount: string }[] | null}
  */
 export function summarizeLocalDisks(rows) {
   const local = (Array.isArray(rows) ? rows : []).filter(isLocalCapacityVolume);
@@ -73,31 +94,5 @@ export function summarizeLocalDisks(rows) {
     uniq.push(r);
   }
   if (!uniq.length) return null;
-  const primary = uniq[0];
-  const total = Number(primary.size) || 0;
-  const used = Number(primary.used) || 0;
-  const percent =
-    typeof primary.use === "number" && Number.isFinite(primary.use)
-      ? primary.use
-      : total > 0
-        ? (used / total) * 100
-        : 0;
-  return {
-    percent: Math.min(100, Math.max(0, percent)),
-    used,
-    total,
-    mount: shortMount(primary.mount || primary.fs || ""),
-    others: uniq.slice(1).map((r) => {
-      const t = Number(r.size) || 0;
-      const u = Number(r.used) || 0;
-      const p =
-        typeof r.use === "number" && Number.isFinite(r.use) ? r.use : t > 0 ? (u / t) * 100 : 0;
-      return {
-        percent: Math.min(100, Math.max(0, p)),
-        used: u,
-        total: t,
-        mount: shortMount(r.mount || r.fs || ""),
-      };
-    }),
-  };
+  return uniq.slice(0, 6).map(toVolume);
 }

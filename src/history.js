@@ -9,11 +9,11 @@ import { HISTORY_SIZE } from "./bar.js";
  * @property {number[]} dskW
  * @property {number[]} netUp
  * @property {number[]} netDn
- * @property {number[]} diskUse
+ * @property {Record<string, number[]>} diskUse
  */
 
 export function createHistory() {
-  return { cpu: [], ram: [], gpu: [], dskR: [], dskW: [], netUp: [], netDn: [], diskUse: [] };
+  return { cpu: [], ram: [], gpu: [], dskR: [], dskW: [], netUp: [], netDn: [], diskUse: {} };
 }
 
 /**
@@ -44,6 +44,19 @@ export function appendHistory(history, snap) {
     dskW: pushSample(history.dskW, snap.disk?.writeBps),
     netUp: pushSample(history.netUp, snap.net?.txBps),
     netDn: pushSample(history.netDn, snap.net?.rxBps),
-    diskUse: pushSample(history.diskUse, snap.diskUse?.percent),
+    diskUse: appendDiskUse(history.diskUse, snap.diskUse),
   };
+}
+
+/**
+ * @param {Record<string, number[]>} prev
+ * @param {{ mount: string, percent: number }[] | null | undefined} vols
+ */
+function appendDiskUse(prev, vols) {
+  /** @type {Record<string, number[]>} */
+  const next = { ...prev };
+  for (const vol of vols || []) {
+    next[vol.mount] = pushSample(next[vol.mount] || [], vol.percent);
+  }
+  return next;
 }

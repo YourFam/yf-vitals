@@ -84,32 +84,30 @@ test("splitSparkLine shares max and fills unused slots with the floor tick", () 
   assert.equal(bits[2], "W");
 });
 
-test("USE row shows local capacity and extra disks; omitted when missing", () => {
+test("each local partition gets its own bar; omitted when missing", () => {
   const none = renderFrame(snap(), createHistory(), {
     columns: 120,
     env: { NO_COLOR: "1" },
     isTTY: true,
   });
-  assert.doesNotMatch(none, /^USE/m);
+  assert.doesNotMatch(none, /^C:/m);
   const frame = renderFrame(
     snap({
-      diskUse: {
-        percent: 36,
-        used: 332 * 1024 ** 3,
-        total: 931 * 1024 ** 3,
-        mount: "C:",
-        others: [{ percent: 10, used: 178 * 1024 ** 3, total: 1863 * 1024 ** 3, mount: "D:" }],
-      },
+      diskUse: [
+        { percent: 36, used: 332 * 1024 ** 3, total: 931 * 1024 ** 3, mount: "C:" },
+        { percent: 10, used: 178 * 1024 ** 3, total: 1863 * 1024 ** 3, mount: "D:" },
+      ],
     }),
     createHistory(),
     { columns: 120, env: { NO_COLOR: "1" }, isTTY: true },
   );
   const ram = frame.indexOf("RAM");
-  const use = frame.indexOf("USE");
+  const c = frame.indexOf("C:");
+  const d = frame.indexOf("D:");
   const dsk = frame.indexOf("DSK");
-  assert.ok(ram >= 0 && use > ram && dsk > use);
-  assert.match(frame, /C:/);
-  assert.match(frame, /D:/);
+  assert.ok(ram >= 0 && c > ram && d > c && dsk > d);
+  assert.match(frame, /C:.*36%/);
+  assert.match(frame, /D:.*10%/);
 });
 
 test("GPU appears between RAM and DSK when present", () => {
