@@ -1,5 +1,6 @@
 import os from "node:os";
 import { createWindowsDiskReader } from "./disk.js";
+import { summarizeLocalDisks } from "./diskuse.js";
 import { rateFromCounters } from "./rates.js";
 
 /**
@@ -36,6 +37,7 @@ import { rateFromCounters } from "./rates.js";
  * @property {DiskSample | null} disk
  * @property {NetSample | null} net
  * @property {GpuSample | null} gpu
+ * @property {{ percent: number, used: number, total: number, mount: string, others: { percent: number, used: number, total: number, mount: string }[] } | null} diskUse
  */
 
 /**
@@ -103,6 +105,7 @@ export function instantSnapshot() {
     disk: { readBps: null, writeBps: null },
     net: { txBps: null, rxBps: null },
     gpu: null,
+    diskUse: null,
   };
 }
 
@@ -175,6 +178,7 @@ export function mergeLastGood(last, next) {
     disk: null,
     net: null,
     gpu: null,
+    diskUse: null,
   };
   return {
     ts: next.ts,
@@ -188,6 +192,7 @@ export function mergeLastGood(last, next) {
     disk: mergePair(next.disk, base.disk, "readBps", "writeBps"),
     net: mergePair(next.net, base.net, "txBps", "rxBps"),
     gpu: next.gpu ?? base.gpu,
+    diskUse: next.diskUse ?? base.diskUse,
   };
 }
 
@@ -299,6 +304,9 @@ export function createSampler(si) {
   /** @type {GpuSample | null} */
   let gpuCache = null;
   let gpuStarted = false;
+  /** @type {Snapshot["diskUse"]} */
+  let diskUseCache = null;
+  let diskUseStarted = false;
   const win32 = process.platform === "win32";
   const winDisk = win32 ? createWindowsDiskReader() : null;
   winDisk?.start();
@@ -421,6 +429,22 @@ export function createSampler(si) {
       });
   }
 
+  function kickDiskUse(lib) {
+    if (diskUseStarted) return;
+    diskUseStarted = true;
+    lib
+      .fsSize()
+      .then((rows) => {
+        diskUseCache = summarizeLocalDisks(rows);
+      })
+      .catch(() => {})
+      .finally(() => {
+        setTimeout(() => {
+          diskUseStarted = false;
+        }, 15000);
+      });
+  }
+
   return {
     /**
      * @returns {Promise<Snapshot>}
@@ -429,6 +453,7 @@ export function createSampler(si) {
       const lib = await loadSi();
       kickStatic(lib);
       kickGpu(lib);
+      kickDiskUse(lib);
       const win = winDisk ? await winDisk.read(winReady ? 400 : 50).catch(() => null) : null;
       if (win) winReady = true;
       const ts = Date.now();
@@ -447,6 +472,7 @@ export function createSampler(si) {
         disk,
         net,
         gpu: gpuCache,
+        diskUse: diskUseCache,
       });
       last = snap;
       return snap;

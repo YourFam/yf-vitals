@@ -168,6 +168,19 @@ export function renderFrame(snap, history, opts = {}) {
   }
   lines.push("");
 
+  if (snap.diskUse) {
+    lines.push(
+      `${color.green("USE")}  ${paintPercentBar(snap.diskUse.percent, color, "green", ascii)}  ${formatPercent(snap.diskUse.percent)}   ${formatBytePair(snap.diskUse.used, snap.diskUse.total)}  ${snap.diskUse.mount}`,
+    );
+    lines.push(`     ${color.green(sparkline(history.diskUse, sparkW, { ascii, max: 100 }))}`);
+    for (const extra of snap.diskUse.others || []) {
+      lines.push(
+        `     ${extra.mount}  ${formatPercent(extra.percent).trim()}   ${formatBytePair(extra.used, extra.total)}`,
+      );
+    }
+  }
+  if (snap.diskUse) lines.push("");
+
   const gpuLines = buildGpuRow(snap.gpu, {
     history: history.gpu,
     ascii,

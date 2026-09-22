@@ -98,6 +98,7 @@ Usage:
   --version, -V          Package version
 
 q / Q / Ctrl+C quit. GPU row is omitted when the OS has no GPU telemetry.
+USE is local NTFS/APFS/HFS fill (no Google Drive, iCloud, or network shares).
 Disk rates are KiB/s–GiB/s; network rates are kbps/Mbps/Gbps.
 Disk / net sparks are split (R/W, ↑/↓) and scale to the pair max in the last 60 ticks.
 Bar fill turns yellow ≥50% and red ≥80%. Unused spark slots use the lowest tick.

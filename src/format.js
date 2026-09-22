@@ -1,6 +1,7 @@
 const KIB = 1024;
 const MIB = 1024 * 1024;
 const GIB = 1024 * 1024 * 1024;
+const TIB = 1024 * 1024 * 1024 * 1024;
 
 /**
  * @param {number} bytes
@@ -8,6 +9,7 @@ const GIB = 1024 * 1024 * 1024;
 export function formatBytes(bytes) {
   const n = Number(bytes);
   if (!Number.isFinite(n) || n < 0) return "n/a";
+  if (n >= TIB) return `${(n / TIB).toFixed(1)} TiB`;
   if (n >= GIB) return `${(n / GIB).toFixed(1)} GiB`;
   return `${(n / MIB).toFixed(1)} MiB`;
 }
@@ -20,8 +22,8 @@ export function formatBytePair(used, total) {
   const t = Number(total);
   const u = Number(used);
   if (!Number.isFinite(t) || t < 0 || !Number.isFinite(u) || u < 0) return "n/a";
-  const unit = t >= GIB ? "GiB" : "MiB";
-  const div = unit === "GiB" ? GIB : MIB;
+  const unit = t >= TIB ? "TiB" : t >= GIB ? "GiB" : "MiB";
+  const div = unit === "TiB" ? TIB : unit === "GiB" ? GIB : MIB;
   return `${(u / div).toFixed(1)} / ${(t / div).toFixed(1)} ${unit}`;
 }
 

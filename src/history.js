@@ -9,10 +9,11 @@ import { HISTORY_SIZE } from "./bar.js";
  * @property {number[]} dskW
  * @property {number[]} netUp
  * @property {number[]} netDn
+ * @property {number[]} diskUse
  */
 
 export function createHistory() {
-  return { cpu: [], ram: [], gpu: [], dskR: [], dskW: [], netUp: [], netDn: [] };
+  return { cpu: [], ram: [], gpu: [], dskR: [], dskW: [], netUp: [], netDn: [], diskUse: [] };
 }
 
 /**
@@ -43,5 +44,6 @@ export function appendHistory(history, snap) {
     dskW: pushSample(history.dskW, snap.disk?.writeBps),
     netUp: pushSample(history.netUp, snap.net?.txBps),
     netDn: pushSample(history.netDn, snap.net?.rxBps),
+    diskUse: pushSample(history.diskUse, snap.diskUse?.percent),
   };
 }
