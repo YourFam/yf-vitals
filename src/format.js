@@ -28,6 +28,22 @@ export function formatBytePair(used, total) {
 }
 
 /**
+ * Page files stay a few MiB "used" while idle and render as 0% / 0.0.
+ * Show the row only once the percent or the used amount would print as non-zero.
+ * @param {number} used
+ * @param {number} total
+ */
+export function swapInUse(used, total) {
+  const u = Number(used);
+  const t = Number(total);
+  if (!Number.isFinite(u) || !Number.isFinite(t) || u <= 0 || t <= 0) return false;
+  const percent = Math.min(100, (u / t) * 100);
+  if (Math.round(percent) >= 1) return true;
+  const div = t >= TIB ? TIB : t >= GIB ? GIB : MIB;
+  return u / div >= 0.05;
+}
+
+/**
  * Disk throughput. `null` → em dash (first tick).
  * @param {number | null | undefined} bytesPerSec
  */

@@ -16,6 +16,7 @@ import {
   formatByteRate,
   formatBytes,
   formatClock,
+  swapInUse,
   formatCores,
   formatCoresDetail,
   formatInterval,
@@ -300,7 +301,7 @@ export function renderFrame(snap, history, opts = {}) {
   const color = createColor({ isTTY: Boolean(opts.isTTY), env });
   const sparkW = sparkWidth(columns, { full });
   const processes = opts.process && snap.processes ? snap.processes : null;
-  const swapOn = full && snap.swap != null && snap.swap.used > 0;
+  const swapOn = full && snap.swap != null && swapInUse(snap.swap.used, snap.swap.total);
   const layout = chooseLayout({
     full,
     rows: opts.rows,

@@ -180,6 +180,26 @@ test("--full widens bars, stacks a 4-row chart, and adds clock, cores, temp", ()
   assert.match(frame.split("\n")[0], /\d{2}:\d{2}:\d{2}/);
 });
 
+test("SWP stays hidden while the page file still reads as 0%", () => {
+  const idle = renderFrame(
+    snap({
+      swap: { percent: (25 * 1024 ** 2) / (6 * 1024 ** 3) * 100, used: 25 * 1024 ** 2, total: 6 * 1024 ** 3 },
+    }),
+    createHistory(),
+    { columns: 100, rows: 40, full: true, env: { NO_COLOR: "1", WT_SESSION: "1" }, isTTY: true },
+  );
+  assert.doesNotMatch(idle, /SWP/);
+  const busy = renderFrame(
+    snap({
+      swap: { percent: 20, used: 1.2 * 1024 ** 3, total: 6 * 1024 ** 3 },
+    }),
+    createHistory(),
+    { columns: 100, rows: 40, full: true, env: { NO_COLOR: "1", WT_SESSION: "1" }, isTTY: true },
+  );
+  assert.match(busy, /SWP/);
+  assert.match(busy, /20%/);
+});
+
 test("--full on a short window falls back to a one-line spark", () => {
   const frame = renderFrame(
     snap({ cpu: { percent: 23, cores: [10, 20] } }),

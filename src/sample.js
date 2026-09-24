@@ -1,6 +1,7 @@
 import os from "node:os";
 import { createWindowsDiskReader } from "./disk.js";
 import { summarizeLocalDisks } from "./diskuse.js";
+import { swapInUse } from "./format.js";
 import { readProcessBlock } from "./processes.js";
 import { rateFromCounters } from "./rates.js";
 
@@ -509,7 +510,7 @@ export function createSampler(si, opts = {}) {
       .then((mem) => {
         const total = num(mem?.swaptotal);
         const used = num(mem?.swapused);
-        if (total == null || total <= 0 || used == null || used <= 0) {
+        if (total == null || used == null || !swapInUse(used, total)) {
           swapCache = null;
           return;
         }
