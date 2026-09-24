@@ -60,17 +60,19 @@ export async function runDashboard(args, deps) {
     restoreTerminal(write, stdin);
   };
 
+  const frameOpts = () => ({
+    columns: deps.columns(),
+    rows: typeof deps.rows === "function" ? deps.rows() : 48,
+    env: deps.env,
+    isTTY: true,
+    intervalSec: args.interval,
+    full: Boolean(args.full),
+    process: Boolean(args.process),
+  });
+
   enterTerminal(write, stdin);
   const first = instantSnapshot();
-  write(
-    CLEAR_HOME +
-      renderFrame(first, createHistory(), {
-        columns: deps.columns(),
-        env: deps.env,
-        isTTY: true,
-        intervalSec: args.interval,
-      }),
-  );
+  write(CLEAR_HOME + renderFrame(first, createHistory(), frameOpts()));
 
   const onData = (chunk) => {
     if (isQuitKey(chunk)) quit = true;
@@ -89,7 +91,7 @@ export async function runDashboard(args, deps) {
   /** @type {{ sample: Function, close?: Function } | null} */
   let sampler = null;
   try {
-    sampler = deps.sampler || createSampler();
+    sampler = deps.sampler || createSampler(undefined, { full: args.full, processes: args.process });
     let history = createHistory();
     /** @type {import("./sample.js").Snapshot | null} */
     let last = first;
@@ -108,12 +110,7 @@ export async function runDashboard(args, deps) {
       snap = mergeLastGood(last, snap);
       last = snap;
       history = appendHistory(history, snap);
-      const frame = renderFrame(snap, history, {
-        columns: deps.columns(),
-        env: deps.env,
-        isTTY: true,
-        intervalSec: args.interval,
-      });
+      const frame = renderFrame(snap, history, frameOpts());
       write(CLEAR_HOME + frame);
       if (shouldStop()) break;
       await (deps.sleep || sleep)(args.interval * 1000, shouldStop);

@@ -20,6 +20,17 @@ test("bare argv is live dashboard at 1s", () => {
   assert.equal(a.version, false);
   assert.equal(a.interval, 1);
   assert.equal(a.lowPower, false);
+  assert.equal(a.full, false);
+  assert.equal(a.process, false);
+});
+
+test("--full and --process combine", () => {
+  const a = parseArgs(sh("--full", "--process"));
+  assert.equal(a.full, true);
+  assert.equal(a.process, true);
+  assert.equal(a.interval, 1);
+  assert.match(helpText(), /--full/);
+  assert.match(helpText(), /--process/);
 });
 
 test("--interval 1 and --interval=1", () => {

@@ -22,6 +22,7 @@ function defaultDeps() {
     write: (s) => process.stdout.write(s),
     isTTY: () => Boolean(process.stdout.isTTY),
     columns: () => process.stdout.columns || 80,
+    rows: () => process.stdout.rows || 24,
     stdin: process.stdin,
     process,
   };

@@ -76,6 +76,15 @@ export function formatInterval(seconds) {
 }
 
 /**
+ * @param {number} ts
+ */
+export function formatClock(ts) {
+  const d = new Date(Number.isFinite(Number(ts)) ? Number(ts) : Date.now());
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
  * @param {number} physical
  * @param {number} logical
  */

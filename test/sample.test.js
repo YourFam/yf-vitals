@@ -4,6 +4,7 @@ import { useAscii } from "../src/ascii.js";
 import { appendHistory, createHistory, pushSample } from "../src/history.js";
 import { parseDiskCounterLine } from "../src/disk.js";
 import {
+  cpuCoreTotals,
   cpuIdleTotal,
   cpuPercentFromDelta,
   gpuBytes,
@@ -36,6 +37,17 @@ test("pickGpu null without telemetry, row object when present", () => {
   assert.equal(g.percent, 55);
   assert.equal(g.used, 2048 * 1024 * 1024);
   assert.equal(g.total, 8192 * 1024 * 1024);
+});
+
+test("pickGpu keeps temperature and power when present", () => {
+  const g = pickGpu([
+    { utilizationGpu: 12, memoryUsed: 1024, memoryTotal: 8192, temperatureGpu: 67, powerDraw: 214 },
+  ]);
+  assert.equal(g.tempC, 67);
+  assert.equal(g.powerW, 214);
+  const bare = pickGpu([{ utilizationGpu: 1, memoryUsed: 1, memoryTotal: 2 }]);
+  assert.equal(bare.tempC, null);
+  assert.equal(bare.powerW, null);
 });
 
 test("pickGpu keeps 0% util and prefers the card with VRAM telemetry", () => {
@@ -101,6 +113,21 @@ test("sumNetBytes skips loopback and virtual NICs", () => {
   ]);
   assert.equal(s.rx, 10);
   assert.equal(s.tx, 20);
+});
+
+test("per-core totals match the summed idle counter", () => {
+  const cpus = [
+    { times: { user: 10, nice: 0, sys: 30, irq: 10, idle: 60 } },
+    { times: { user: 5, nice: 1, sys: 4, irq: 0, idle: 20 } },
+  ];
+  const cores = cpuCoreTotals(cpus, true);
+  const sum = cpuIdleTotal(cpus, true);
+  assert.equal(cores.length, 2);
+  assert.equal(
+    cores.reduce((n, c) => n + c.total, 0),
+    sum.total,
+  );
+  assert.equal(cores[0].total, 100);
 });
 
 test("Windows cpu times do not double-count irq inside sys", () => {

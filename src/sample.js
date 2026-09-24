@@ -1,13 +1,20 @@
 import os from "node:os";
 import { createWindowsDiskReader } from "./disk.js";
 import { summarizeLocalDisks } from "./diskuse.js";
+import { readProcessBlock } from "./processes.js";
 import { rateFromCounters } from "./rates.js";
 
 /**
  * @typedef {object} CpuSample
  * @property {number} percent
+ * @property {number[] | null} [cores]
  *
  * @typedef {object} RamSample
+ * @property {number} percent
+ * @property {number} used
+ * @property {number} total
+ *
+ * @typedef {object} SwapSample
  * @property {number} percent
  * @property {number} used
  * @property {number} total
@@ -24,6 +31,18 @@ import { rateFromCounters } from "./rates.js";
  * @property {number | null} percent
  * @property {number | null} used
  * @property {number | null} total
+ * @property {number | null} [tempC]
+ * @property {number | null} [powerW]
+ *
+ * @typedef {object} ProcUse
+ * @property {string} name
+ * @property {number} [percent]
+ * @property {number} [mem]
+ *
+ * @typedef {object} ProcessBlock
+ * @property {ProcUse[]} cpu
+ * @property {ProcUse[]} ram
+ * @property {ProcUse[] | null} gpu
  *
  * @typedef {object} Snapshot
  * @property {number} ts
@@ -37,6 +56,8 @@ import { rateFromCounters } from "./rates.js";
  * @property {DiskSample | null} disk
  * @property {NetSample | null} net
  * @property {GpuSample | null} gpu
+ * @property {SwapSample | null} swap
+ * @property {ProcessBlock | null} processes
  * @property {{ percent: number, used: number, total: number, mount: string }[] | null} diskUse
  */
 
@@ -105,6 +126,8 @@ export function instantSnapshot() {
     disk: { readBps: null, writeBps: null },
     net: { txBps: null, rxBps: null },
     gpu: null,
+    swap: null,
+    processes: null,
     diskUse: null,
   };
 }
@@ -134,7 +157,7 @@ export function gpuBytes(n, vramMb) {
 }
 
 /**
- * @param {Array<{ utilizationGpu?: number, memoryUsed?: number, memoryTotal?: number, vram?: number }>} controllers
+ * @param {Array<{ utilizationGpu?: number, memoryUsed?: number, memoryTotal?: number, vram?: number, temperatureGpu?: number, powerDraw?: number }>} controllers
  * @returns {GpuSample | null}
  */
 export function pickGpu(controllers) {
@@ -146,10 +169,14 @@ export function pickGpu(controllers) {
     const used = gpuBytes(num(c.memoryUsed), null);
     const total = gpuBytes(num(c.memoryTotal), null);
     if (util == null && (used == null || total == null)) continue;
+    const temp = num(c.temperatureGpu);
+    const power = num(c.powerDraw);
     usable.push({
       percent: util ?? 0,
       used,
       total,
+      tempC: temp != null && temp > 0 ? temp : null,
+      powerW: power != null && power >= 0 ? power : null,
     });
   }
   if (usable.length === 0) return null;
@@ -178,6 +205,8 @@ export function mergeLastGood(last, next) {
     disk: null,
     net: null,
     gpu: null,
+    swap: null,
+    processes: null,
     diskUse: null,
   };
   return {
@@ -192,6 +221,8 @@ export function mergeLastGood(last, next) {
     disk: mergePair(next.disk, base.disk, "readBps", "writeBps"),
     net: mergePair(next.net, base.net, "txBps", "rxBps"),
     gpu: next.gpu ?? base.gpu,
+    swap: next.swap ?? base.swap,
+    processes: next.processes ?? base.processes,
     diskUse: next.diskUse ?? base.diskUse,
   };
 }
@@ -212,20 +243,37 @@ function mergePair(next, last, a, b) {
 }
 
 /**
+ * @param {os.CpuInfo} cpu
+ * @param {boolean} windows
+ */
+export function cpuTimes(cpu, windows) {
+  const t = cpu.times;
+  const irq = t.irq || 0;
+  const sys = windows ? Math.max(0, (t.sys || 0) - irq) : t.sys || 0;
+  const idle = t.idle || 0;
+  const total = (t.user || 0) + (t.nice || 0) + sys + irq + idle;
+  return { idle, total };
+}
+
+/**
  * @param {os.CpuInfo[]} cpus
  */
 export function cpuIdleTotal(cpus, windows = process.platform === "win32") {
   let idle = 0;
   let total = 0;
   for (const c of cpus) {
-    const t = c.times;
-    const irq = t.irq || 0;
-    const sys = windows ? Math.max(0, (t.sys || 0) - irq) : t.sys || 0;
-    const i = t.idle || 0;
-    idle += i;
-    total += (t.user || 0) + (t.nice || 0) + sys + irq + i;
+    const part = cpuTimes(c, windows);
+    idle += part.idle;
+    total += part.total;
   }
   return { idle, total };
+}
+
+/**
+ * @param {os.CpuInfo[]} cpus
+ */
+export function cpuCoreTotals(cpus, windows = process.platform === "win32") {
+  return (Array.isArray(cpus) ? cpus : []).map((c) => cpuTimes(c, windows));
 }
 
 /**
@@ -276,11 +324,14 @@ export function sumNetBytes(stats) {
 }
 
 /**
- * @param {{ cpu?: Function, currentLoad?: Function, mem?: Function, osInfo?: Function, fsStats?: Function, networkStats?: Function, graphics?: Function }} [si]
+ * @param {{ cpu?: Function, currentLoad?: Function, mem?: Function, osInfo?: Function, fsStats?: Function, networkStats?: Function, graphics?: Function, processes?: Function }} [si]
+ * @param {{ full?: boolean, processes?: boolean }} [opts]
  */
-export function createSampler(si) {
+export function createSampler(si, opts = {}) {
   /** @type {null | { idle: number, total: number }} */
   let prevCpu = null;
+  /** @type {{ idle: number, total: number }[] | null} */
+  let prevCores = null;
   /** @type {null | { rx: number, wx: number }} */
   let prevDisk = null;
   /** @type {null | { rx: number, tx: number }} */
@@ -307,11 +358,23 @@ export function createSampler(si) {
   /** @type {Snapshot["diskUse"]} */
   let diskUseCache = null;
   let diskUseStarted = false;
+  /** @type {SwapSample | null} */
+  let swapCache = null;
+  let swapStarted = false;
+  /** @type {ProcessBlock | null} */
+  let procCache = null;
+  let procStarted = false;
+  const wantSwap = Boolean(opts.full);
+  const wantProc = Boolean(opts.processes);
   const win32 = process.platform === "win32";
   const winDisk = win32 ? createWindowsDiskReader() : null;
   winDisk?.start();
   let winReady = false;
-  prevCpu = cpuIdleTotal(os.cpus());
+  prevCores = cpuCoreTotals(os.cpus());
+  prevCpu = prevCores.reduce(
+    (sum, core) => ({ idle: sum.idle + core.idle, total: sum.total + core.total }),
+    { idle: 0, total: 0 },
+  );
 
   async function loadSi() {
     if (si) return si;
@@ -340,11 +403,20 @@ export function createSampler(si) {
   }
 
   async function sampleCpu() {
-    const curr = cpuIdleTotal(os.cpus());
+    const coresNow = cpuCoreTotals(os.cpus());
+    const curr = coresNow.reduce(
+      (sum, core) => ({ idle: sum.idle + core.idle, total: sum.total + core.total }),
+      { idle: 0, total: 0 },
+    );
     const pct = cpuPercentFromDelta(prevCpu, curr);
+    const corePct =
+      prevCores && prevCores.length === coresNow.length
+        ? coresNow.map((core, i) => cpuPercentFromDelta(prevCores[i], core) ?? 0)
+        : null;
     prevCpu = curr;
+    prevCores = coresNow;
     if (pct == null) return null;
-    return { percent: pct };
+    return { percent: pct, cores: corePct };
   }
 
   async function sampleRam(lib, ramTotal) {
@@ -429,6 +501,47 @@ export function createSampler(si) {
       });
   }
 
+  function kickSwap(lib) {
+    if (!wantSwap || swapStarted || typeof lib.mem !== "function") return;
+    swapStarted = true;
+    lib
+      .mem()
+      .then((mem) => {
+        const total = num(mem?.swaptotal);
+        const used = num(mem?.swapused);
+        if (total == null || total <= 0 || used == null || used <= 0) {
+          swapCache = null;
+          return;
+        }
+        swapCache = {
+          percent: Math.min(100, Math.max(0, (used / total) * 100)),
+          used,
+          total,
+        };
+      })
+      .catch(() => {})
+      .finally(() => {
+        setTimeout(() => {
+          swapStarted = false;
+        }, 15000);
+      });
+  }
+
+  function kickProcesses(lib) {
+    if (!wantProc || procStarted || typeof lib.processes !== "function") return;
+    procStarted = true;
+    readProcessBlock(lib)
+      .then((block) => {
+        if (block) procCache = block;
+      })
+      .catch(() => {})
+      .finally(() => {
+        setTimeout(() => {
+          procStarted = false;
+        }, 2000);
+      });
+  }
+
   function kickDiskUse(lib) {
     if (diskUseStarted) return;
     diskUseStarted = true;
@@ -454,6 +567,8 @@ export function createSampler(si) {
       kickStatic(lib);
       kickGpu(lib);
       kickDiskUse(lib);
+      kickSwap(lib);
+      kickProcesses(lib);
       const win = winDisk ? await winDisk.read(winReady ? 400 : 50).catch(() => null) : null;
       if (win) winReady = true;
       const ts = Date.now();
@@ -472,6 +587,8 @@ export function createSampler(si) {
         disk,
         net,
         gpu: gpuCache,
+        swap: swapCache,
+        processes: procCache,
         diskUse: diskUseCache,
       });
       last = snap;

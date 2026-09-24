@@ -12,6 +12,7 @@ import {
   heatLevel,
   sparkWidth,
   sparkline,
+  tallChart,
 } from "../src/bar.js";
 
 test("bar clamps; 0 empty; 100 filled; 150 filled", () => {
@@ -59,6 +60,17 @@ test("sparkWidth is min(60, columns-36), at least 16", () => {
   assert.equal(sparkWidth(200), 60);
   assert.equal(sparkWidth(80), 44);
   assert.equal(sparkWidth(40), 16);
+  assert.equal(sparkWidth(200, { full: true }), 164);
+  assert.equal(sparkWidth(40, { full: true }), 16);
+});
+
+test("tall chart is 4 rows, bottom tick, blank above a low value", () => {
+  const lines = tallChart([100, 0], 2, { rows: 4 });
+  assert.equal(lines.length, 4);
+  assert.equal(lines[0][0], UNI_BAR_FILLED);
+  assert.equal(lines[0][1], " ");
+  assert.equal(lines[3][1], UNI_SPARK[0]);
+  assert.equal(lines[3][0], UNI_BAR_FILLED);
 });
 
 test("heatLevel bands", () => {

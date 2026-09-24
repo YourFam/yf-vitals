@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { appendHistory, createHistory } from "../src/history.js";
-import { buildGpuRow, renderFrame, splitSparkLine } from "../src/render.js";
+import { buildGpuRow, chooseLayout, renderFrame, splitSparkLine } from "../src/render.js";
 import { createColor, stripAnsi } from "../src/color.js";
 import { restoreTerminal, ENTER_ALT, HIDE_CURSOR, SHOW_CURSOR, LEAVE_ALT } from "../src/tty.js";
 import { pickGpu } from "../src/sample.js";
@@ -109,6 +109,10 @@ test("each local partition gets its own bar; omitted when missing", () => {
   assert.ok(ram >= 0 && dsk > ram && net > dsk && c > net && d > c);
   assert.match(frame, /C:.*36%/);
   assert.match(frame, /D:.*10%/);
+  const lines = frame.split("\n");
+  const cLine = lines.findIndex((line) => line.startsWith("C:"));
+  assert.equal(lines[cLine + 1], "");
+  assert.ok(lines[cLine + 2].startsWith("D:"));
 });
 
 test("GPU appears between RAM and DSK when present", () => {
@@ -151,6 +155,116 @@ test("bar fill is yellow at 72% and red at 90%", () => {
   assert.match(hot, /\u001b\[31m/);
   assert.doesNotMatch(cool, /\u001b\[33m/);
   assert.doesNotMatch(cool, /\u001b\[31m/);
+});
+
+test("--full widens bars, stacks a 4-row chart, and adds clock, cores, temp", () => {
+  const frame = renderFrame(
+    snap({
+      ts: Date.UTC(2026, 0, 2, 14, 2, 11),
+      cpu: { percent: 23, cores: [12, 55, 91] },
+      gpu: { percent: 88, used: 12 * 1024 ** 3, total: 16 * 1024 ** 3, tempC: 67, powerW: 214 },
+    }),
+    createHistory(),
+    { columns: 120, rows: 60, full: true, env: { NO_COLOR: "1", WT_SESSION: "1" }, isTTY: true, intervalSec: 1 },
+  );
+  const cpu = frame.split("\n").find((line) => line.startsWith("CPU"));
+  const bar = cpu.match(/\[([█░]+)\]/);
+  assert.equal(bar[1].length, 40);
+  assert.match(frame, /67°C/);
+  assert.match(frame, /214 W/);
+  assert.match(frame, /cores /);
+  const between = frame.split("\n");
+  const cpuAt = between.findIndex((line) => line.startsWith("CPU"));
+  const coresAt = between.findIndex((line) => line.includes("cores "));
+  assert.equal(coresAt - cpuAt, 5);
+  assert.match(frame.split("\n")[0], /\d{2}:\d{2}:\d{2}/);
+});
+
+test("--full on a short window falls back to a one-line spark", () => {
+  const frame = renderFrame(
+    snap({ cpu: { percent: 23, cores: [10, 20] } }),
+    createHistory(),
+    { columns: 100, rows: 16, full: true, env: { NO_COLOR: "1" }, isTTY: true },
+  );
+  const lines = frame.split("\n");
+  const cpuAt = lines.findIndex((line) => line.startsWith("CPU"));
+  const coresAt = lines.findIndex((line) => line.includes("cores "));
+  assert.equal(coresAt - cpuAt, 2);
+});
+
+test("--process prints side-by-side rankings and heats GPU percent", () => {
+  const frame = renderFrame(
+    snap({
+      cpu: { percent: 10 },
+      ram: { percent: 10, used: 1, total: 32 * 1024 ** 3 },
+      processes: {
+        cpu: [
+          { name: "Cursor", percent: 22 },
+          { name: "chrome", percent: 4 },
+        ],
+        ram: [{ name: "chrome", mem: 6.4 * 1024 ** 3 }],
+        gpu: [{ name: "Helldivers2", percent: 94 }],
+      },
+    }),
+    createHistory(),
+    { columns: 100, rows: 40, process: true, env: { TERM: "xterm-256color", WT_SESSION: "1" }, isTTY: true },
+  );
+  const plain = stripAnsi(frame);
+  assert.match(plain, /Cursor\s+22%/);
+  assert.match(plain, /chrome\s+6\.4 GiB/);
+  assert.match(plain, /Helldivers2\s+94%/);
+  const hot = frame.split("\n").find((line) => stripAnsi(line).includes("Helldivers2"));
+  assert.match(hot, /\u001b\[31m/);
+});
+
+test("--process without a GPU sample omits that column", () => {
+  const frame = renderFrame(
+    snap({
+      processes: {
+        cpu: [{ name: "node", percent: 7 }],
+        ram: [{ name: "node", mem: 200 * 1024 ** 2 }],
+        gpu: null,
+      },
+    }),
+    createHistory(),
+    { columns: 100, rows: 40, process: true, env: { NO_COLOR: "1" }, isTTY: true },
+  );
+  const header = frame.split("\n").find((line) => line.startsWith("CPU") && line.includes("RAM") && !line.includes("["));
+  assert.ok(header);
+  assert.equal(header.includes("GPU"), false);
+});
+
+test("chooseLayout shrinks charts before process rows", () => {
+  const processes = {
+    cpu: Array.from({ length: 8 }, (_, i) => ({ name: `p${i}`, percent: 8 - i })),
+    ram: Array.from({ length: 8 }, (_, i) => ({ name: `p${i}`, mem: 1 })),
+    gpu: [{ name: "game", percent: 90 }],
+  };
+  const wide = chooseLayout({
+    full: true,
+    rows: 80,
+    columns: 120,
+    gpu: true,
+    partitions: 2,
+    swap: false,
+    cores: true,
+    processes,
+  });
+  assert.equal(wide.chartH, 4);
+  assert.equal(wide.procN, 8);
+  assert.equal(wide.barWidth, 40);
+  const short = chooseLayout({
+    full: true,
+    rows: 24,
+    columns: 100,
+    gpu: true,
+    partitions: 2,
+    swap: false,
+    cores: true,
+    processes,
+  });
+  assert.equal(short.chartH, 1);
+  assert.ok(short.procN < 8);
 });
 
 test("restoreTerminal restores cursor and alt-screen flags", () => {

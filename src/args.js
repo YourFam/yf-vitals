@@ -11,6 +11,8 @@ const LOW_POWER_INTERVAL = 2;
  * @property {boolean} version
  * @property {number} interval
  * @property {boolean} lowPower
+ * @property {boolean} full
+ * @property {boolean} process
  */
 
 /**
@@ -43,6 +45,8 @@ export function parseArgs(argv) {
   let interval = DEFAULT_INTERVAL;
   let intervalSet = false;
   let lowPower = false;
+  let full = false;
+  let processList = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
@@ -52,6 +56,10 @@ export function parseArgs(argv) {
       version = true;
     } else if (a === "--low-power") {
       lowPower = true;
+    } else if (a === "--full") {
+      full = true;
+    } else if (a === "--process") {
+      processList = true;
     } else if (a === "--interval") {
       interval = parseIntervalValue("--interval", args[i + 1]);
       intervalSet = true;
@@ -72,6 +80,8 @@ export function parseArgs(argv) {
       version,
       interval: DEFAULT_INTERVAL,
       lowPower: false,
+      full: false,
+      process: false,
     };
   }
 
@@ -81,7 +91,7 @@ export function parseArgs(argv) {
     interval = DEFAULT_INTERVAL;
   }
 
-  return { help: false, version: false, interval, lowPower };
+  return { help: false, version: false, interval, lowPower, full, process: processList };
 }
 
 export function helpText() {
@@ -91,14 +101,19 @@ Usage:
   yf-vitals
   yf-vitals --low-power
   yf-vitals --interval 0.5
+  yf-vitals --full
+  yf-vitals --process
+  yf-vitals --full --process
 
   --interval <seconds>   Tick period (${MIN_INTERVAL}–${MAX_INTERVAL}, default ${DEFAULT_INTERVAL})
   --low-power            Tick every ${LOW_POWER_INTERVAL}s (wins over --interval)
+  --full                 Taller CPU/RAM/GPU charts, wider bars, per-core ticks, clock, GPU °C and watts
+  --process              Top processes by CPU, RAM, and NVIDIA GPU. Combines with --full
   --help, -h             This text
   --version, -V          Package version
 
 q / Q / Ctrl+C quit. GPU row is omitted when the OS has no GPU telemetry.
-Each local partition (C:, D:, Data, …) gets its own fill bar. No Google Drive, iCloud, or network shares.
+Each local partition (C:, D:, Data, …) gets its own fill bar and no sparkline. No Google Drive, iCloud, or network shares.
 Disk rates are KiB/s–GiB/s; network rates are kbps/Mbps/Gbps.
 Disk / net sparks are split (R/W, ↑/↓) and scale to the pair max in the last 60 ticks.
 Bar fill turns yellow ≥50% and red ≥80%. Unused spark slots use the lowest tick.

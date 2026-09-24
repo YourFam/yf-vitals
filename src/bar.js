@@ -36,13 +36,61 @@ export function barCharset(ascii) {
     : { filled: UNI_BAR_FILLED, empty: UNI_BAR_EMPTY };
 }
 
+export const BAR_WIDTH_FULL = 40;
+
 /**
  * @param {number} columns
+ * @param {{ full?: boolean }} [opts]
  */
-export function sparkWidth(columns) {
+export function sparkWidth(columns, opts = {}) {
   const cols = Number(columns);
   const available = Number.isFinite(cols) && cols > 0 ? cols - SPARK_GUTTER : SPARK_MAX;
-  return Math.max(SPARK_MIN, Math.min(SPARK_MAX, available));
+  const cap = opts.full ? available : SPARK_MAX;
+  return Math.max(SPARK_MIN, Math.min(cap, available));
+}
+
+/**
+ * Vertical block chart, top row first. Scaled 0–100.
+ * Bottom row keeps the low tick; rows the value never reaches stay blank.
+ * Missing samples pad on the left the same way.
+ *
+ * @param {number[]} values
+ * @param {number} width
+ * @param {{ rows?: number, ascii?: boolean }} [opts]
+ * @returns {string[]}
+ */
+export function tallChart(values, width, opts = {}) {
+  const rows = Math.max(1, Math.floor(opts.rows ?? 4));
+  const ascii = Boolean(opts.ascii);
+  const w = Math.max(0, Math.floor(width));
+  const levelsPerRow = ascii ? 1 : 8;
+  const totalLevels = rows * levelsPerRow;
+  const charset = ascii ? ASC_SPARK : UNI_SPARK;
+  const floor = charset[0];
+  const list = (Array.isArray(values) ? values : []).slice(-w);
+  /** @type {Array<number | null>} */
+  const cols = Array(w - list.length).fill(null).concat(list);
+  /** @type {string[]} */
+  const lines = [];
+  for (let row = rows - 1; row >= 0; row -= 1) {
+    let line = "";
+    for (const value of cols) {
+      const n = value == null ? 0 : Number(value);
+      const h =
+        value == null || !Number.isFinite(n) || n <= 0
+          ? 0
+          : Math.round(Math.min(1, n / 100) * totalLevels);
+      const local = h - row * levelsPerRow;
+      if (ascii) {
+        if (local >= 1) line += ASC_BAR_FILLED;
+        else line += row === 0 ? floor : " ";
+      } else if (local >= 8) line += UNI_BAR_FILLED;
+      else if (local > 0) line += charset[local - 1];
+      else line += row === 0 ? floor : " ";
+    }
+    lines.push(line);
+  }
+  return lines;
 }
 
 /**
